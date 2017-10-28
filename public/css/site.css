@@ -1,0 +1,123 @@
+body {
+  font-family: 'Kawkab Mono', monospace;
+  max-width: 600px;
+  margin: 0 auto;
+  padding-top: 1em;
+  -webkit-font-smoothing: antialiased;
+  color: #333;
+  line-height: 1.5em;
+  direction: rtl;
+}
+
+#drawing {
+  position: relative;
+}
+
+h1, h2, h3 {
+  color: #000;
+}
+h1 {
+  font-size: 2.5em
+}
+
+h2 {
+  font-size: 1.5em
+}
+
+h3 {
+  font-size: 1.5em
+}
+
+a {
+  text-decoration: none;
+  color: #09f;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+img.reference
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -150;
+  opacity: 0.5;
+  display: block;
+  margin: auto auto;
+}
+
+svg
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1px solid #f0f0f0;
+}
+
+canvas
+{
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -100;
+}
+
+svg.hidden
+{
+  opacity: 0;
+}
+
+svg path,
+svg line
+{
+  fill: none;
+  stroke: #222;
+  stroke-width: 0.25px;
+  stroke-linecap: round;
+}
+
+svg path.handle
+{
+  fill: #999;
+  cursor: pointer;
+}
+
+svg line.handle {
+ stroke: #999;
+ stroke-width: 1px;
+ /*stroke-dasharray: 2;*/
+}
+
+svg circle.handle {
+  cursor: -webkit-grab;
+  fill: white;
+  stroke-width: 1px;
+  stroke: #999;
+  /*opacity: 0;*/
+}
+
+svg circle.rotate {
+  fill: #999;
+  cursor: pointer;
+}
+
+svg.debug .handles circle {
+  opacity: 0.5;
+  fill: #3e3;
+}
+
+svg line.tangent {
+  stroke: #999;
+ stroke-width: 1px;
+ stroke-dasharray: 5;
+}
+
+svg circle.tangent {
+  cursor: pointer;
+  fill: white;
+  stroke-width: 1px;
+  stroke: #999;
+  /*opacity: 0;*/
+}
