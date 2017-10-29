@@ -188,6 +188,8 @@
   js/document.onkeyup
   (fn [e]
     (cond
+      (= "KeyH" (.-code e))
+      (swap! ui-state update :show-handles? not)
       (= "KeyA" (.-code e))
       (reset!
         state
