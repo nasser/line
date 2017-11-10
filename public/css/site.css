@@ -58,6 +58,7 @@ svg
 
 canvas
 {
+  /*opacity: 0.5;*/
   position: absolute;
   top: 0;
   left: 0;
@@ -90,12 +91,24 @@ svg line.handle {
  /*stroke-dasharray: 2;*/
 }
 
-svg circle.handle {
+svg line.angle {
+  stroke-dasharray: 1;
+}
+
+svg rect.angle,
+svg circle.angle {
+  fill: #999;
+  cursor: pointer;
+}
+
+svg rect.handle {
   cursor: -webkit-grab;
-  fill: white;
-  stroke-width: 1px;
-  stroke: #999;
-  /*opacity: 0;*/
+  fill: #999;
+}
+
+svg .drag {
+  cursor: pointer;
+  opacity: 0;
 }
 
 svg circle.rotate {
@@ -110,8 +123,14 @@ svg.debug .handles circle {
 
 svg line.tangent {
   stroke: #999;
- stroke-width: 1px;
- stroke-dasharray: 5;
+  stroke-width: 1px;
+  stroke-dasharray: 5;
+}
+
+svg line.hobby-line {
+  stroke: #ccc;
+  stroke-width: 1px;
+  stroke-dasharray: 1 3;
 }
 
 svg circle.tangent {
