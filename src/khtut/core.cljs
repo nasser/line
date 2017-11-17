@@ -12,10 +12,7 @@
        :tangent-angle js/Math.PI
        :tangent-size 30
        :angle -2
-       :width 25
-       ; :width-control 10
-       :tension-top 50
-       :tension-bottom 50}]]))
+       :width 25}]]))
 
 (defonce ui-state
   (r/atom
@@ -54,18 +51,14 @@
   ; (cycle ["red" "#000000" "#113CC1" "#35BE0A"])
   )
 
-; [p1, p2] = tension2control(p0.on, p0.outDir, p0.outLength, p3.inLength, p3.inDir, p3.on)
-
 (defn rasterize-stroke [ctx s color]
   (set! (.-fillStyle ctx) color)
   (set! (.-strokeStyle ctx) "Red")
   (let [pairs (partition 2 1 s)]
     (doseq [[{x1 :x y1 :y angle1 :angle angle-control1 :angle-control
-              width1 :width tangle1 :tangent-angle tsize1 :tangent-size
-              tension-top1 :tension-top tension-bottom1 :tension-bottom}
+              width1 :width tangle1 :tangent-angle tsize1 :tangent-size}
              {x2 :x y2 :y angle2 :angle angle-control2 :angle-control
-              width2 :width tangle2 :tangent-angle tsize2 :tangent-size
-              tension-top2 :tension-top tension-bottom2 :tension-bottom}]
+              width2 :width tangle2 :tangent-angle tsize2 :tangent-size}]
             pairs]
       (let [control1-x (+ x1 (* tsize1 (cos tangle1)))
             control1-y (+ y1 (* tsize1 (sin tangle1)))
@@ -80,15 +73,7 @@
             top2-x (- x2 (* width2 (cos angle2)))
             top2-y (- y2 (* width2 (sin angle2)))
             bot2-x (+ x2 (* width2 (cos angle2)))
-            bot2-y (+ y2 (* width2 (sin angle2)))
-            [top-u top-v]
-            (js/tension2control
-              (js/Vector. top1-x top1-y) tangle1 (* 0.025 tension-top1)
-              (* 0.025 tension-top2) tangle2 (js/Vector. top2-x top2-y))
-            [bot-u bot-v]
-            (js/tension2control
-              (js/Vector. bot1-x bot1-y) tangle1 (* 0.025 tension-bottom1)
-              (* 0.025 tension-bottom2) tangle2 (js/Vector. bot2-x bot2-y))]
+            bot2-y (+ y2 (* width2 (sin angle2)))]
         (doseq [t (range 0 1 0.005)]
           (let [x* (bezier t x1 control1-x control2-x x2)
                 y* (bezier t y1 control1-y control2-y y2)
@@ -278,53 +263,8 @@
      [:circle.tangent {:cx x3 :cy y3 :r 3
                        :on-mouse-down (handle-fn data tangent-interaction)}]]))
 
-(defn hobby-interaction [cursor]
-  (let [{:keys [x y angle width tension-top tension-bottom]} @cursor
-        base-x-top (- x (* width (cos angle)))
-        base-y-top (- y (* width (sin angle)))]
-    (fn [evt-drag]
-      (let [p (client-to-page evt-drag)
-            tension (distance (.-x p) (.-y p) base-x-top base-y-top)]
-        (swap! cursor assoc :tension-top tension)))))
-
-(defn hobby-handle [data]
-  (let [{:keys [x y angle width tension-top tension-bottom]} @data
-        rad 2.5
-        base-x-top (- x (* width (cos angle)))
-        base-y-top (- y (* width (sin angle)))
-        handle-x-top (- base-x-top (* tension-top (cos angle)))
-        handle-y-top (- base-y-top (* tension-top (sin angle)))
-        base-x-bot (+ x (* width (cos angle)))
-        base-y-bot (+ y (* width (sin angle)))
-        handle-x-bot (+ base-x-bot (* tension-bottom (cos angle)))
-        handle-y-bot (+ base-y-bot (* tension-bottom (sin angle)))]
-    [:g
-     [cross handle-x-top handle-y-top :hobby 2]
-     [cross handle-x-bot handle-y-bot :hobby 2]
-     [:line.hobby-line {:x1 base-x-top :y1 base-y-top
-                        :x2 handle-x-top :y2 handle-y-top}]
-     [:line.hobby-line {:x1 base-x-bot :y1 base-y-bot
-                        :x2 handle-x-bot :y2 handle-y-bot}]
-     [:circle.drag {:cx handle-x-top :cy handle-y-top :r 3
-                    :on-mouse-down
-                    (handle-fn
-                      #(let [p (client-to-page %)
-                             tension (distance (.-x p) (.-y p) base-x-top base-y-top)]
-                         (swap! data assoc :tension-top tension)))}]
-     [:circle.drag {:cx handle-x-bot :cy handle-y-bot :r 3
-                    :on-mouse-down 
-                    (handle-fn
-                      #(let [p (client-to-page %)
-                             tension (distance (.-x p) (.-y p) base-x-bot base-y-bot)]
-                         (swap! data assoc :tension-bottom tension)))}]
-     #_
-     [:rect.hobby {:x x3 :y y3
-                   :width (* 2 rad) :height (* 2 rad)
-                   :on-mouse-down (handle-fn data angle-interaction)}]]))
-
 (defn handle [data]
   [:g
-   ; [hobby-handle data]
    [nib-handle data]
    [tangent-handle data]
    [drag-handle data]
