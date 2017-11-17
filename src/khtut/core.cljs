@@ -103,11 +103,11 @@
             (.ellipse ctx x* y* width* thickness* angle* 0 (* 2 js/Math.PI))
             (.fill ctx)
             ))
-        (set! (.-strokeStyle ctx) "white")
-        (.beginPath ctx)
-        (.moveTo ctx x1 y1)
-        (.bezierCurveTo ctx control1-x control1-y control2-x control2-y x2 y2)
-        (.stroke ctx)
+        ; (set! (.-strokeStyle ctx) "white")
+        ; (.beginPath ctx)
+        ; (.moveTo ctx x1 y1)
+        ; (.bezierCurveTo ctx control1-x control1-y control2-x control2-y x2 y2)
+        ; (.stroke ctx)
         ))))
 
 (defn rasterize-segment
