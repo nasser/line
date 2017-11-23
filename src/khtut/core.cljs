@@ -5,19 +5,38 @@
 ;; -------------------------
 ;; Views
 
-(defonce state
+(defn next-letter [l]
+  (js/String.fromCharCode (inc (.charCodeAt l 0))))
+
+(defn point* 
+  ([] (point* 300 300 js/Math.PI 30 -2 25))
+  ([x y tangent-angle tangent-size angle width]
+   {:x x
+    :y y
+    :tangent-angle tangent-angle
+    :tangent-size tangent-size
+    :angle angle
+    :width width}))
+
+(defn stroke* [] [(point*)])
+(defn strokes* [] [(stroke*)])
+
+(def state
   (r/atom
-    [[{:x 300
-       :y 300
-       :tangent-angle js/Math.PI
-       :tangent-size 30
-       :angle -2
-       :width 25}]]))
+    [{:string "ا" :strokes (strokes*)}]))
 
 (defonce ui-state
   (r/atom
     {:show-handles? true
-     :show-centerlines? false}))
+     :show-centerlines? false
+     :current-string 0
+     :current-stroke 0}))
+
+(defn current-string []
+  (:current-string @ui-state))
+
+(defn current-strokes []
+  (get-in @state [(current-string) :strokes]))
 
 ;; https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
 (defn client-to-page [event]
@@ -79,21 +98,10 @@
                 y* (bezier t y1 control1-y control2-y y2)
                 angle* (lerp t angle1 angle2)
                 width* (lerp t width1 width2)
-                ; angle* (bezier t angle1 (+ angle1 (* 0.01 angle-control1)) ; (* 0.0 angle-control1)
-                ;                 angle2 (+ angle2 (* 0.01 angle-control2))) ; (* 0.0 angle-control2))
-                ; width* (bezier t width1  angle-control1*
-                ;                  width2 angle-control2*)
                 thickness* 3]
             (.beginPath ctx)
             (.ellipse ctx x* y* width* thickness* angle* 0 (* 2 js/Math.PI))
-            (.fill ctx)
-            ))
-        ; (set! (.-strokeStyle ctx) "white")
-        ; (.beginPath ctx)
-        ; (.moveTo ctx x1 y1)
-        ; (.bezierCurveTo ctx control1-x control1-y control2-x control2-y x2 y2)
-        ; (.stroke ctx)
-        ))))
+            (.fill ctx)))))))
 
 (defn rasterize-segment
   [ctx q
@@ -112,41 +120,23 @@
         (.ellipse ctx x* y* width* 3 angle* 0 (* 2 js/Math.PI))
         (.fill ctx)))))
 
-(defn rasterize-stroke-pct [ctx q s color]
-  (set! (.-fillStyle ctx) color)
-  (let [pairs (partition 2 1 s)
-        t (* q (count pairs))
-        complete-pair-count (js/Math.floor t)
-        last-pair-pct (- t complete-pair-count)]
-    (js/console.log "rasterize-stroke-pct" q t last-pair-pct)
-    (doseq [[a b] (take complete-pair-count pairs)]
-      (rasterize-segment ctx 1 a b))
-    (when-not (= 1 q)
-      (let [[a b] (nth pairs complete-pair-count)]
-        (rasterize-segment ctx last-pair-pct a b)))))
-
 (defn redraw-canvas [strokes]
   (let [canvas (js/document.querySelector "canvas")
+        current-stroke (@ui-state :current-stroke)
+        show-handles? (@ui-state :show-handles?)
         ctx (.getContext canvas "2d")]
     (.clearRect ctx 0 0 (.-width canvas) (.-height canvas))
     (doall
-      (map #(rasterize-stroke ctx %1 %2)
-           strokes stroke-colors))))
-
-(defn redraw-canvas-pct [strokes t]
-  (let [canvas (js/document.querySelector "canvas")
-        ctx (.getContext canvas "2d")
-        complete-stroke-count (js/Math.floor t)
-        last-stroke-pct (- t complete-stroke-count)]
-    (.clearRect ctx 0 0 (.-width canvas) (.-height canvas))
-    (doall
-      (map #(rasterize-stroke-pct ctx 1 %1 %2)
-           (take complete-stroke-count strokes)
-           stroke-colors))
-    (rasterize-stroke-pct
-      ctx last-stroke-pct
-      (nth strokes complete-stroke-count)
-      (first (drop complete-stroke-count stroke-colors)))))
+      (map (fn [s i]
+             (rasterize-stroke
+               ctx s
+               "black"
+               #_
+               (if (or (= i current-stroke)
+                       (not show-handles?))
+                 "black"
+                 "#aaa")))
+           strokes (range)))))
 
 (defn handle-fn
   ([f]
@@ -154,7 +144,7 @@
      (let [drag-fn
            (fn [e*]
              (f e*)
-             (redraw-canvas @state))]
+             (redraw-canvas (current-strokes)))]
        (.addEventListener js/window "mousemove" drag-fn)
        (.addEventListener js/window "mouseup"
                           #(.removeEventListener js/window "mousemove" drag-fn)))))
@@ -164,7 +154,7 @@
            drag-fn
            (fn [e*]
              (d e*)
-             (redraw-canvas @state))]
+             (redraw-canvas (current-strokes)))]
        (.addEventListener js/window "mousemove" drag-fn)
        (.addEventListener js/window "mouseup"
                           #(.removeEventListener js/window "mousemove" drag-fn))))))
@@ -267,8 +257,7 @@
   [:g
    [nib-handle data]
    [tangent-handle data]
-   [drag-handle data]
-   ])
+   [drag-handle data]])
 
 (defn handles [data]
   (into
@@ -277,87 +266,105 @@
       #(vector handle (r/cursor data [%]))
       (range (count @data)))))
 
-(defn strokes [data]
+(defn strokes [mappings]
   (into
     [:g]
-    (map
-      #(vector handles (r/cursor data [%]))
-      (range (count @data)))))
+    (let [current-stroke (@ui-state :current-stroke)]
+      [[handles (r/cursor mappings [(current-string) :strokes current-stroke])]])))
 
 (defn toggle [atm key]
   (fn [e] (swap! atm update key not)))
+
+(defn letter-box []
+  [:input#letter
+   {:value (get-in @state [(current-string) :string])
+    :on-change #(swap! state assoc-in
+                       [(current-string) :string]
+                       (.. % -target -value))
+    :type "text"}])
+
+(defn overview-letter [n letter strokes]
+  (let [image-id (str "thumbnail-" n)
+        img (js/document.querySelector (str "#" image-id))]
+    (when (and img (= n (current-string)))
+      (set! (.-src img)
+            (.toDataURL (js/document.querySelector "canvas"))))
+    [:div
+     {:class (str "letter "
+                  (when (= n (current-string)) "selected"))
+      :on-mouse-down #(do (swap! ui-state assoc :current-string n)
+                        (swap! ui-state assoc :current-stroke 0)
+                        (redraw-canvas (current-strokes)))}
+     [:img {:id image-id}]
+     ; [:canvas {:width 100 :height 100}]
+     [:p letter]]))
+
+(defn new-letter []
+  [:div.letter.new
+   {:on-mouse-down
+    #(let [l* (next-letter (last (map :string @state)))]
+       (swap! state conj {:string l* :strokes (strokes*)})
+       (swap! ui-state assoc :current-string (dec (count @state)))
+       (redraw-canvas (current-strokes)))}
+   [:p "+"]])
+
+(defn overview-letters [state]
+  (let [s @state
+        ls (map :string s)
+        strokes (map :strokes s)]
+    (into [:div#letters]
+          (conj
+            (mapv #(overview-letter %1 %2 %3)
+                 (range) ls strokes)
+            [new-letter]))))
 
 (defn app []
   [:div
    [:h2 "الخطاط الصغير"]
    [:p [:em "رمزي ناصر - عمل جاري"]]
-   [:p "A=أضف نقطة تحكم، D=أزال نقطة تحكم، H=إخفاء/أظهر النقاط"]
    [:div#drawing
     ; [:img.reference {:src "test.png"}]
     [:canvas {:width 600 :height 600}]
     [:svg {:class (when-not (:show-handles? @ui-state) "hidden")
            :width "600px" :height "600px"
            :viewBox "0 0 600 600"}
-     [strokes state]]]])
+     [strokes state]]
+    [letter-box]
+    [overview-letters state]]])
 
 ;; -------------------------
 ;; Initialize app
 
 (defn mount-root []
   (r/render [app] (.getElementById js/document "app"))
-  (redraw-canvas @state))
-
-(def progress (atom 0))
-
-(defn download-canvas [canvas filename]
-  (let [link (js/document.createElement "a")
-        data-url (.toDataURL canvas)]
-    (set! (.-href link) data-url)
-    (set! (.-download link) filename)
-    (.click link)))
-
-(defn download-animation [step]
-  (let [canvas (js/document.querySelector "canvas")
-        strokes @state
-        r (range 0 (count strokes) step)
-        frame-count (count r)]
-    (doall 
-      (map 
-        (fn [t i]
-          (redraw-canvas-pct strokes t)
-          (download-canvas canvas (str "animation-" (.slice (str "000000" i) -6) ".png")))
-        r (range)))))
+  (redraw-canvas (current-strokes)))
 
 (set!
   js/document.onkeyup
   (fn [e]
-    (cond
-      (= "ArrowRight" (.-code e))
-      (do
-        (swap! progress + 0.05)
-        (js/console.log @progress)
-        (redraw-canvas-pct @state @progress))
-      (= "ArrowLeft" (.-code e))
-      (do
-        (swap! progress - 0.05)
-        (js/console.log @progress)
-        (redraw-canvas-pct @state @progress))
-      (= "KeyR" (.-code e))
-      (redraw-canvas @state)
-      (= "KeyH" (.-code e))
-      (swap! ui-state update :show-handles? not)
-      (= "KeyA" (.-code e))
-      (swap! state update-in [(dec (count @state))]
-             conj (last (last @state)))
-      (= "KeyD" (.-code e))
-      (do
-        (swap! state update-in [(dec (count @state))]
+    (js/console.log (.-shiftKey e))
+    (when (.-shiftKey e)
+      (cond
+        (= "ArrowRight" (.-code e))
+        (swap! ui-state update :current-stroke inc)
+        (= "ArrowLeft" (.-code e))
+        (swap! ui-state update :current-stroke dec)
+        (= "KeyH" (.-code e))
+        (swap! ui-state update :show-handles? not)
+        (= "KeyA" (.-code e))
+        (swap! state update-in [(current-string) :strokes (dec (count (current-strokes)))]
+               conj (last (last (current-strokes))))
+        (= "KeyD" (.-code e))
+        (swap! state update-in [(current-string) :strokes (dec (count (current-strokes)))]
                (comp vec drop-last))
-        (redraw-canvas @state))
-      (= "KeyS" (.-code e))
-      (swap! state conj (last @state))
-      (= "KeyF" (.-code e))
-      (swap! state (comp vec drop-last)))))
+        (= "KeyS" (.-code e))
+        (do (swap! state update-in [(current-string) :strokes]
+                   conj (last (current-strokes)))
+          (swap! ui-state update :current-stroke inc))
+        (= "KeyF" (.-code e))
+        (do (swap! state update-in [(current-string) :strokes] (comp vec drop-last))
+          (swap! ui-state update :current-stroke dec))))
+    (redraw-canvas (current-strokes))))
 
 (defn init! []
   (mount-root))
