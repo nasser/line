@@ -5,39 +5,6 @@
 ;; -------------------------
 ;; Views
 
-(defn next-letter [l]
-  (js/String.fromCharCode (inc (.charCodeAt l 0))))
-
-(defn point* 
-  ([] (point* 300 300 js/Math.PI 30 -2 25))
-  ([x y tangent-angle tangent-size angle width]
-   {:x x
-    :y y
-    :tangent-angle tangent-angle
-    :tangent-size tangent-size
-    :angle angle
-    :width width}))
-
-(defn stroke* [] [(point*)])
-(defn strokes* [] [(stroke*)])
-
-(def state
-  (r/atom
-    [{:string "ا" :strokes (strokes*)}]))
-
-(defonce ui-state
-  (r/atom
-    {:show-handles? true
-     :show-centerlines? false
-     :current-string 0
-     :current-stroke 0}))
-
-(defn current-string []
-  (:current-string @ui-state))
-
-(defn current-strokes []
-  (get-in @state [(current-string) :strokes]))
-
 ;; https://stackoverflow.com/questions/10298658/mouse-position-inside-autoscaled-svg
 (defn client-to-page [event]
   (let [svg (js/document.querySelector "svg")
@@ -65,6 +32,85 @@
      (* d
         (pow t 3))))
 
+(defn next-letter [l]
+  (js/String.fromCharCode (inc (.charCodeAt l 0))))
+
+(defn point* 
+  ([] (point* 300 300 js/Math.PI 30 -2 25))
+  ([x y] (assoc (point*) :x x :y y))
+  ([x y tangent-angle tangent-size angle width]
+   {:x x
+    :y y
+    :tangent-angle tangent-angle
+    :tangent-size tangent-size
+    :angle angle
+    :width width}))
+
+(defn stroke* [] [(point*)])
+
+(defn strokes* [] [(stroke*)])
+
+(defonce state
+  (r/atom
+    [{:string "ا" :strokes (strokes*)}]))
+
+(defn stroke-map [letters]
+  (reduce (fn [m {:keys [string strokes]}]
+            (update m string (fnil conj #{}) strokes))
+          {}
+          letters))
+
+(defn translate [stroke dx dy]
+  (-> stroke
+      (update :x + dx)
+      (update :y + dy)))
+
+(defn find-next [string alphabet]
+  (let [l (first string) ;; TODO match multiple letters as well
+        s (-> alphabet (get l) first) ;; TODO pick stroke based on best tangents, etc 
+        ]
+    [l s]))
+
+(comment
+  (redraw-canvas (vector (vec (flatten (string->strokes "اب" (-> @state stroke-map))))))
+  (string->strokes "اب" (-> @state stroke-map)))
+
+(defn string->strokes [string alphabet]
+  (loop [strokes []
+         string string
+         origin (point* 500 400)]
+    (let [[letter stroke] (find-next string alphabet)
+          string* (.substr string (count letter))
+          initial (-> stroke first first)
+          px (+ (* (:tangent-size origin)
+                   (cos (:tangent-angle origin)))
+                (:x origin))
+          py (+ (* (:tangent-size origin)
+                   (sin (:tangent-angle origin)))
+                (:y origin))
+          dx (- px (:x initial))
+          dy (- py (:y initial))
+          stroke* (mapv (fn [s] (mapv #(translate % dx dy) s)) stroke)]
+      (println "stroke*" stroke*)
+      (if (empty? string*)
+        (into strokes stroke*)
+        (recur (into strokes stroke*)
+               string*
+               (-> stroke* last last))))))
+
+(def ui-state
+  (r/atom
+    {:show-handles? true
+     :show-centerlines? false
+     :current-string 0
+     :current-stroke 0}))
+
+(defn current-string []
+  (:current-string @ui-state))
+
+(defn current-strokes []
+  (get-in @state [(current-string) :strokes]))
+
 (def stroke-colors
   (cycle ["black"])
   ; (cycle ["red" "#000000" "#113CC1" "#35BE0A"])
@@ -74,11 +120,12 @@
   (set! (.-fillStyle ctx) color)
   (set! (.-strokeStyle ctx) "Red")
   (let [pairs (partition 2 1 s)]
-    (doseq [[{x1 :x y1 :y angle1 :angle angle-control1 :angle-control
+    (doseq [[{x1 :x y1 :y angle1 :angle 
               width1 :width tangle1 :tangent-angle tsize1 :tangent-size}
-             {x2 :x y2 :y angle2 :angle angle-control2 :angle-control
+             {x2 :x y2 :y angle2 :angle 
               width2 :width tangle2 :tangent-angle tsize2 :tangent-size}]
             pairs]
+      (println "???" tangle1)
       (let [control1-x (+ x1 (* tsize1 (cos tangle1)))
             control1-y (+ y1 (* tsize1 (sin tangle1)))
             control2-x (- x2 (* tsize2 (cos tangle2)))
@@ -127,16 +174,9 @@
         ctx (.getContext canvas "2d")]
     (.clearRect ctx 0 0 (.-width canvas) (.-height canvas))
     (doall
-      (map (fn [s i]
-             (rasterize-stroke
-               ctx s
-               "black"
-               #_
-               (if (or (= i current-stroke)
-                       (not show-handles?))
-                 "black"
-                 "#aaa")))
-           strokes (range)))))
+      (map (fn [s]
+             (rasterize-stroke ctx s "black"))
+           strokes))))
 
 (defn handle-fn
   ([f]
@@ -318,19 +358,29 @@
                  (range) ls strokes)
             [new-letter]))))
 
+(defn drawing []
+  [:div#drawing
+   ; [:img.reference {:src "test.png"}]
+   [:canvas {:width 600 :height 600}]
+   [:svg {:class (when-not (:show-handles? @ui-state) "hidden")
+          :width "600px" :height "600px"
+          :viewBox "0 0 600 600"}
+    [strokes state]]
+   [letter-box]
+   [overview-letters state]])
+
+(defn rasterizer []
+  [:div#rasterizer
+   [:input {:type "text"}]
+   [:canvas {:width 600 :height 600}]])
+
 (defn app []
   [:div
    [:h2 "الخطاط الصغير"]
    [:p [:em "رمزي ناصر - عمل جاري"]]
-   [:div#drawing
-    ; [:img.reference {:src "test.png"}]
-    [:canvas {:width 600 :height 600}]
-    [:svg {:class (when-not (:show-handles? @ui-state) "hidden")
-           :width "600px" :height "600px"
-           :viewBox "0 0 600 600"}
-     [strokes state]]
-    [letter-box]
-    [overview-letters state]]])
+   [drawing]
+   ; [rasterizer]
+   ])
 
 ;; -------------------------
 ;; Initialize app
@@ -342,7 +392,6 @@
 (set!
   js/document.onkeyup
   (fn [e]
-    (js/console.log (.-shiftKey e))
     (when (.-shiftKey e)
       (cond
         (= "ArrowRight" (.-code e))
